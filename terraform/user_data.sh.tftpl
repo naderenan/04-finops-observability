@@ -1,0 +1,31 @@
+#!/bin/bash
+set -euo pipefail
+dnf install -y docker
+systemctl enable --now docker
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL https://github.com/docker/compose/releases/download/v2.39.2/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+D=/opt/monitoring
+mkdir -p $D/grafana/provisioning/datasources $D/grafana/provisioning/dashboards $D/grafana/dashboards
+%{ for path, data in files_b64gz ~}
+echo '${data}' | base64 -d | gunzip > "$D/${path}"
+%{ endfor ~}
+
+# Grafana: admin password from SSM Parameter Store, anonymous read-only viewers
+PW=$(aws ssm get-parameter --region ${region} --name "${param_name}" --with-decryption --query Parameter.Value --output text)
+umask 077
+cat > $D/grafana.env <<ENV
+GF_SECURITY_ADMIN_PASSWORD=$PW
+GF_AUTH_ANONYMOUS_ENABLED=true
+GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+GF_USERS_ALLOW_SIGN_UP=false
+GF_ANALYTICS_REPORTING_ENABLED=false
+GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/finops.json
+AWS_REGION=${region}
+ENV
+umask 022
+chmod 644 $D/grafana/dashboards/*.json $D/*.yml $D/grafana/provisioning/*/*.yml
+
+cd $D && docker compose up -d
+systemctl disable --now sshd || true

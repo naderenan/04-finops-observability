@@ -1,0 +1,35 @@
+groups:
+  - name: finops-rightsizing
+    rules:
+      - alert: RightsizeCandidateLowCPU
+        expr: (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[10m]))) * 100 < 10
+        for: 10m
+        labels: { severity: info, team: finops }
+        annotations:
+          summary: "CPU below 10% for 10 min on {{ $labels.instance }}: right-sizing candidate"
+      - alert: RightsizeCandidateLowMemory
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 30
+        for: 15m
+        labels: { severity: info, team: finops }
+        annotations:
+          summary: "Memory use below 30% on {{ $labels.instance }}: consider a smaller instance"
+  - name: reliability
+    rules:
+      - alert: HighCPU
+        expr: (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 85
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "CPU above 85% for 10 min on {{ $labels.instance }}"
+      - alert: DiskAlmostFull
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}) * 100 > 85
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Root disk above 85% on {{ $labels.instance }}"
+      - alert: TargetDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Scrape target {{ $labels.job }} is down"

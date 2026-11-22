@@ -1,0 +1,40 @@
+flowchart LR
+    admin["Admin (allow-listed IP)<br/>Grafana :3000 · Prometheus :9090"]
+    mail["Email<br/>budget + FinOps alerts"]
+    subgraph AWS["AWS Cloud - us-east-1"]
+        subgraph VPC["VPC 10.50.0.0/16"]
+            subgraph EC2["Monitoring host t3.small · IMDSv2 · no SSH (SSM)"]
+                prom["Prometheus<br/>alert rules: right-size,<br/>high CPU, disk, target down"]
+                node["node-exporter"]
+                graf["Grafana<br/>dashboards: Host health,<br/>FinOps waste & savings"]
+            end
+        end
+        eb["EventBridge<br/>daily schedule"]
+        lam["FinOps scanner (Lambda)<br/>unattached EBS · idle EIPs · gp2→gp3<br/>low-CPU right-sizing · Spot candidates"]
+        cw["CloudWatch<br/>FinOps metrics + alarms"]
+        sns["SNS topic"]
+        bud["AWS Budgets<br/>actual 80% · forecast 100%"]
+        ssm["SSM Parameter Store<br/>Grafana admin secret"]
+        waste["Demo waste<br/>1 GiB gp2 volume · idle EIP"]
+    end
+    admin --> graf & prom
+    node --> prom --> graf
+    eb --> lam -->|scan| waste
+    lam -->|PutMetricData| cw
+    lam --> sns
+    cw -->|alarm| sns --> mail
+    bud --> mail
+    graf -->|"CloudWatch datasource (instance role)"| cw
+    ssm -.-> graf
+
+    classDef aws fill:#FF9900,stroke:#232F3E,color:#232F3E
+    classDef oss fill:#E6522C,stroke:#7a2a12,color:#ffffff
+    classDef ext fill:#f4f4f4,stroke:#555,color:#111
+    classDef waste fill:#ffe0e0,stroke:#b00020,color:#600
+    class eb,lam,cw,sns,bud,ssm aws
+    class prom,node,graf oss
+    class admin,mail ext
+    class waste waste
+    style AWS fill:#ffffff,stroke:#232F3E,stroke-width:2px
+    style VPC fill:#f2f8ff,stroke:#147EBA,stroke-width:2px
+    style EC2 fill:#fff7ef,stroke:#ED7100,stroke-dasharray:4 3
